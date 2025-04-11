@@ -18,9 +18,19 @@ public class AdminController : Controller
         return View();
     }
 
-    public IActionResult Privacy()
+    public IActionResult UserManagement()
     {
-        return View();
+        return View("UserManagement/Index");
+    }
+
+    public IActionResult Order()
+    {
+        return View("Order/Index");
+    }
+
+    public IActionResult Product()
+    {
+        return View("Product/Index");
     }
 
     [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
