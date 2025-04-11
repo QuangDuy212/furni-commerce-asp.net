@@ -11,8 +11,5 @@ namespace Furni.Models
 
         [StringLength(200)]
         public string Address { get; set; }
-
-        [DataType(DataType.Date)]
-        public DateTime? DateOfBirth { get; set; }
     }
 }
