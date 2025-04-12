@@ -26,8 +26,24 @@
             </ul>
 
             <ul class="custom-navbar-cta navbar-nav mb-2 mb-md-0 ms-5">
-                <li><a class="nav-link" href="#"><img src="images/user.svg"></a></li>
-                <li><a class="nav-link" asp-controller="Cart" asp-action="Index"><img src="images/cart.svg"></a></li>
+                @if (User.Identity != null && User.Identity.IsAuthenticated)
+                {
+                    @* <li><a class="nav-link" asp-controller="Account" asp-action="Profile"><img src="images/user.svg">
+                        </a></li> *@
+                    <li class="d-flex align-items-center justify-content-center">
+                        <form asp-controller="Account" asp-action="Logout" method="post" class="d-inline">
+                            <button type="submit" class="btn btn-link nav-link"
+                                style="padding: 0; background: none; border: none; font-size: 14px;">Logout</button>
+                        </form>
+                    </li>
+                    <li><a class="nav-link" asp-controller="Cart" asp-action="Index"><img src="images/cart.svg"></a></li>
+                }
+                else
+                {
+                    <li><a class="nav-link" asp-controller="Account" asp-action="Login">Login</a></li>
+                    <li><a class="nav-link" asp-controller="Account" asp-action="Register">Register</a></li>
+                }
+
             </ul>
         </div>
     </div>
