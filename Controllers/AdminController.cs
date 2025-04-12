@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.Identity;
 using Furni.ViewModel;
 using ClosedXML.Excel;
 using System.ComponentModel;
+using Furni.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace Furni.Controllers;
 
@@ -12,11 +14,13 @@ public class AdminController : Controller
 {
     private readonly ILogger<AdminController> _logger;
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly ApplicationDbContext _context;
 
-    public AdminController(ILogger<AdminController> logger, UserManager<ApplicationUser> userManager)
+    public AdminController(ILogger<AdminController> logger, UserManager<ApplicationUser> userManager, ApplicationDbContext context)
     {
         _logger = logger;
         _userManager = userManager;
+        _context = context;
     }
 
     public IActionResult Index()
@@ -334,14 +338,271 @@ public class AdminController : Controller
             return BadRequest($"An error occurred while importing users: {ex.Message}");
         }
     }
+
+    public async Task<IActionResult> ProductManagement()
+    {
+        var products = await _context.Products.Select(product => new ProductViewModel
+        {
+            Id = product.Id,
+            Name = product.Name,
+            Price = product.Price,
+            ImageUrl = product.ImageUrl
+        }).ToListAsync();
+
+        return View("ProductManagement/Index", products);
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> UpdateProductView(int id)
+    {
+        // Find product by ID
+        var product = await _context.Products.FindAsync(id);
+        if (product == null)
+        {
+            return NotFound($"Product with ID {id} not found.");
+        }
+
+        // Convert Product to ProductViewModel
+        var productViewModel = new ProductViewModel
+        {
+            Id = product.Id,
+            Name = product.Name,
+            Price = product.Price,
+            ImageUrl = product.ImageUrl
+        };
+
+        // Return view with ProductViewModel
+        return View("ProductManagement/Update", productViewModel);
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> UpdateProduct(ProductViewModel model)
+    {
+        if (ModelState.IsValid)
+        {
+            var product = await _context.Products.FindAsync(model.Id);
+            if (product == null)
+            {
+                return NotFound();
+            }
+
+            // Cập nhật các thuộc tính
+            product.Name = model.Name;
+            product.Price = model.Price;
+
+            // Xử lý file upload nếu có file mới
+            if (model.ImageFile != null)
+            {
+                var fileName = Path.GetFileNameWithoutExtension(model.ImageFile.FileName);
+                var extension = Path.GetExtension(model.ImageFile.FileName);
+                var newFileName = $"{fileName}_{Guid.NewGuid()}{extension}";
+                var filePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/images", newFileName);
+
+                using (var stream = new FileStream(filePath, FileMode.Create))
+                {
+                    await model.ImageFile.CopyToAsync(stream);
+                }
+
+                // Cập nhật đường dẫn hình ảnh
+                product.ImageUrl = $"/images/{newFileName}";
+            }
+
+            _context.Products.Update(product);
+            await _context.SaveChangesAsync();
+
+            return RedirectToAction("ProductManagement");
+        }
+
+        return View(model);
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> DeleteProduct(int id)
+    {
+        // Find product by ID
+        var product = await _context.Products.FindAsync(id);
+        if (product == null)
+        {
+            return NotFound($"Product with ID {id} not found.");
+        }
+
+        // Delete the product
+        _context.Products.Remove(product);
+        await _context.SaveChangesAsync();
+
+        // Redirect to ProductManagement after successful deletion
+        return RedirectToAction("ProductManagement");
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> DeleteMultipleProducts(List<int> ids)
+    {
+        if (ids == null || !ids.Any())
+        {
+            ModelState.AddModelError(string.Empty, "No products selected for deletion.");
+            return RedirectToAction("ProductManagement");
+        }
+
+        var products = await _context.Products.Where(p => ids.Contains(p.Id)).ToListAsync();
+        _context.Products.RemoveRange(products);
+        await _context.SaveChangesAsync();
+
+        // Redirect to ProductManagement after deletion
+        return RedirectToAction("ProductManagement");
+    }
+
+    [HttpGet]
+    public IActionResult CreateProductView()
+    {
+        // Return view to display product creation form
+        return View("ProductManagement/Create");
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> CreateProduct(CreateProductViewModel model)
+    {
+        if (ModelState.IsValid)
+        {
+            string imageUrl = null;
+
+            if (model.ImageFile != null)
+            {
+                var fileName = Path.GetFileNameWithoutExtension(model.ImageFile.FileName);
+                var extension = Path.GetExtension(model.ImageFile.FileName);
+                var newFileName = $"{fileName}_{Guid.NewGuid()}{extension}";
+                var filePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/images", newFileName);
+
+                using (var stream = new FileStream(filePath, FileMode.Create))
+                {
+                    await model.ImageFile.CopyToAsync(stream);
+                }
+
+                imageUrl = $"/images/{newFileName}";
+            }
+
+            var product = new Product
+            {
+                Name = model.Name,
+                Price = model.Price,
+                ImageUrl = imageUrl
+            };
+
+            _context.Products.Add(product);
+            await _context.SaveChangesAsync();
+
+            return RedirectToAction("ProductManagement");
+        }
+
+        return View("ProductManagement/Create", model);
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> ExportSelectedProducts(List<int> ids)
+    {
+        if (ids == null || !ids.Any())
+        {
+            return BadRequest("No products selected for export.");
+        }
+
+        // Get list of products by IDs
+        var products = await _context.Products
+            .Where(product => ids.Contains(product.Id))
+            .Select(product => new
+            {
+                product.Id,
+                product.Name,
+                product.Price,
+                product.ImageUrl
+            }).ToListAsync();
+
+        // Create Excel file with ClosedXML
+        using (var workbook = new XLWorkbook())
+        {
+            var worksheet = workbook.Worksheets.Add("Products");
+
+            // Create column headers
+            worksheet.Cell(1, 1).Value = "ID";
+            worksheet.Cell(1, 2).Value = "Name";
+            worksheet.Cell(1, 3).Value = "Price";
+            worksheet.Cell(1, 4).Value = "Image URL";
+
+            // Fill data into rows
+            for (int i = 0; i < products.Count; i++)
+            {
+                worksheet.Cell(i + 2, 1).Value = products[i].Id;
+                worksheet.Cell(i + 2, 2).Value = products[i].Name;
+                worksheet.Cell(i + 2, 3).Value = products[i].Price;
+                worksheet.Cell(i + 2, 4).Value = products[i].ImageUrl;
+            }
+
+            // Save Excel file to memory
+            using (var stream = new MemoryStream())
+            {
+                workbook.SaveAs(stream);
+                var content = stream.ToArray();
+
+                // Return Excel file
+                return File(content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Products.xlsx");
+            }
+        }
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> ImportProducts(IFormFile file)
+    {
+        if (file == null || file.Length == 0)
+        {
+            return BadRequest("Please upload a valid Excel file.");
+        }
+
+        try
+        {
+            using (var stream = new MemoryStream())
+            {
+                await file.CopyToAsync(stream);
+
+                // Open Excel file with ClosedXML
+                using (var workbook = new XLWorkbook(stream))
+                {
+                    var worksheet = workbook.Worksheet(1); // Get first sheet
+                    var rows = worksheet.RowsUsed();
+
+                    foreach (var row in rows.Skip(1)) // Skip header row
+                    {
+                        try
+                        {
+                            var product = new Product
+                            {
+                                Name = row.Cell(2).GetValue<string>(),
+                                Price = row.Cell(3).GetValue<decimal>(),
+                                ImageUrl = row.Cell(4).GetValue<string>()
+                            };
+
+                            _context.Products.Add(product);
+                        }
+                        catch (Exception ex)
+                        {
+                            // Log error and skip problematic row
+                            _logger.LogError($"Error processing row: {ex.Message}");
+                            continue;
+                        }
+                    }
+
+                    await _context.SaveChangesAsync();
+                }
+            }
+
+            return RedirectToAction("ProductManagement");
+        }
+        catch (Exception ex)
+        {
+            return BadRequest($"An error occurred while importing products: {ex.Message}");
+        }
+    }
+
     public IActionResult Order()
     {
         return View("Order/Index");
-    }
-
-    public IActionResult Product()
-    {
-        return View("Product/Index");
     }
 
     [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]

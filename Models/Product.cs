@@ -14,5 +14,9 @@ namespace Furni.Models
         [Required]
         [Range(0, double.MaxValue, ErrorMessage = "Price must be a positive value.")]
         public decimal Price { get; set; }
+
+        [Required]
+        [StringLength(100)]
+        public string ImageUrl { get; set; }
     }
 }
