@@ -25,7 +25,34 @@ public class AdminController : Controller
 
     public IActionResult Index()
     {
-        return View();
+        var totalUsers = _userManager.Users.Count();
+        var totalProducts = _context.Products.Count();
+        var totalOrders = _context.Orders.Count();
+
+        // Tính tổng số đơn hàng theo trạng thái
+        var pendingOrders = _context.Orders.Count(o => o.Status == "Pending");
+        var completedOrders = _context.Orders.Count(o => o.Status == "Completed");
+        var canceledOrders = _context.Orders.Count(o => o.Status == "Canceled");
+
+        // Tính tỷ lệ phần trăm
+        double pendingPercentage = totalOrders > 0 ? (double)pendingOrders / totalOrders * 100 : 0;
+        double completedPercentage = totalOrders > 0 ? (double)completedOrders / totalOrders * 100 : 0;
+        double canceledPercentage = totalOrders > 0 ? (double)canceledOrders / totalOrders * 100 : 0;
+
+        var dashboardViewModel = new DashboardViewModel
+        {
+            TotalUsers = totalUsers,
+            TotalProducts = totalProducts,
+            TotalOrders = totalOrders,
+            PendingOrders = pendingOrders,
+            CompletedOrders = completedOrders,
+            CanceledOrders = canceledOrders,
+            PendingOrdersPercentage = pendingPercentage,
+            CompletedOrdersPercentage = completedPercentage,
+            CanceledOrdersPercentage = canceledPercentage
+        };
+
+        return View(dashboardViewModel);
     }
 
 
