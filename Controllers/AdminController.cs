@@ -600,9 +600,204 @@ public class AdminController : Controller
         }
     }
 
-    public IActionResult Order()
+    public async Task<IActionResult> OrderManagement()
     {
-        return View("Order/Index");
+        var orders = await _context.Orders
+            .Include(o => o.OrderItems)
+            .ThenInclude(oi => oi.Product)
+            .OrderByDescending(o => o.OrderDate)
+            .ToListAsync();
+
+        return View("OrderManagement/Index", orders);
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> OrderDetails(int id)
+    {
+        var order = await _context.Orders
+            .Include(o => o.OrderItems)
+            .ThenInclude(oi => oi.Product)
+            .FirstOrDefaultAsync(o => o.Id == id);
+
+        if (order == null)
+        {
+            return NotFound($"Order with ID {id} not found.");
+        }
+
+        return View("OrderManagement/Details", order);
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> UpdateOrder(int id)
+    {
+        // Lấy thông tin đơn hàng theo ID
+        var order = await _context.Orders
+            .Include(o => o.OrderItems)
+            .ThenInclude(oi => oi.Product)
+            .FirstOrDefaultAsync(o => o.Id == id);
+
+        if (order == null)
+        {
+            return NotFound($"Order with ID {id} not found.");
+        }
+
+        // Tạo ViewModel để truyền dữ liệu đến view
+        var orderViewModel = new OrderViewModel
+        {
+            Id = order.Id,
+            OrderDate = order.OrderDate,
+            TotalAmount = order.TotalAmount,
+            Status = order.Status,
+        };
+
+        return View("OrderManagement/Update", orderViewModel);
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> UpdateOrderStatus(int id, string status)
+    {
+        var order = await _context.Orders.FindAsync(id);
+        if (order == null)
+        {
+            return NotFound($"Order with ID {id} not found.");
+        }
+
+        order.Status = status;
+        _context.Orders.Update(order);
+        await _context.SaveChangesAsync();
+
+        return RedirectToAction("OrderManagement");
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> DeleteOrder(int id)
+    {
+        var order = await _context.Orders
+            .Include(o => o.OrderItems)
+            .FirstOrDefaultAsync(o => o.Id == id);
+
+        if (order == null)
+        {
+            return NotFound($"Order with ID {id} not found.");
+        }
+
+        _context.Orders.Remove(order);
+        await _context.SaveChangesAsync();
+
+        return RedirectToAction("OrderManagement");
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> DeleteMultipleOrders(List<int> ids)
+    {
+        if (ids == null || !ids.Any())
+        {
+            ModelState.AddModelError(string.Empty, "No orders selected for deletion.");
+            return RedirectToAction("OrderManagement");
+        }
+
+        var orders = await _context.Orders
+            .Where(o => ids.Contains(o.Id))
+            .ToListAsync();
+
+        _context.Orders.RemoveRange(orders);
+        await _context.SaveChangesAsync();
+
+        return RedirectToAction("OrderManagement");
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> ExportSelectedOrders(List<int> ids)
+    {
+        if (ids == null || !ids.Any())
+        {
+            return BadRequest("No orders selected for export.");
+        }
+
+        var orders = await _context.Orders
+            .Where(o => ids.Contains(o.Id))
+            .Include(o => o.OrderItems)
+            .ThenInclude(oi => oi.Product)
+            .ToListAsync();
+
+        using (var workbook = new XLWorkbook())
+        {
+            var worksheet = workbook.Worksheets.Add("Orders");
+
+            // Tạo tiêu đề cột
+            worksheet.Cell(1, 1).Value = "Order ID";
+            worksheet.Cell(1, 2).Value = "Order Date";
+            worksheet.Cell(1, 3).Value = "Total Amount";
+            worksheet.Cell(1, 4).Value = "Status";
+
+            // Điền dữ liệu vào các hàng
+            for (int i = 0; i < orders.Count; i++)
+            {
+                worksheet.Cell(i + 2, 1).Value = orders[i].Id;
+                worksheet.Cell(i + 2, 2).Value = orders[i].OrderDate.ToString("dd/MM/yyyy");
+                worksheet.Cell(i + 2, 3).Value = orders[i].TotalAmount;
+                worksheet.Cell(i + 2, 4).Value = orders[i].Status;
+            }
+
+            using (var stream = new MemoryStream())
+            {
+                workbook.SaveAs(stream);
+                var content = stream.ToArray();
+
+                return File(content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Orders.xlsx");
+            }
+        }
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> ImportOrders(IFormFile file)
+    {
+        if (file == null || file.Length == 0)
+        {
+            return BadRequest("Please upload a valid Excel file.");
+        }
+
+        try
+        {
+            using (var stream = new MemoryStream())
+            {
+                await file.CopyToAsync(stream);
+
+                using (var workbook = new XLWorkbook(stream))
+                {
+                    var worksheet = workbook.Worksheet(1);
+                    var rows = worksheet.RowsUsed();
+
+                    foreach (var row in rows.Skip(1)) // Bỏ qua dòng tiêu đề
+                    {
+                        try
+                        {
+                            var order = new Order
+                            {
+                                OrderDate = row.Cell(2).GetValue<DateTime>(),
+                                TotalAmount = row.Cell(3).GetValue<decimal>(),
+                                Status = row.Cell(4).GetValue<string>()
+                            };
+
+                            _context.Orders.Add(order);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError($"Error processing row: {ex.Message}");
+                            continue;
+                        }
+                    }
+
+                    await _context.SaveChangesAsync();
+                }
+            }
+
+            return RedirectToAction("OrderManagement");
+        }
+        catch (Exception ex)
+        {
+            return BadRequest($"An error occurred while importing orders: {ex.Message}");
+        }
     }
 
     [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
