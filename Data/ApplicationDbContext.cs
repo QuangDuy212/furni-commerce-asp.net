@@ -9,10 +9,13 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         : base(options)
     {
     }
-    // Thêm DbSet cho bảng Product
+
+    // Thêm DbSet cho các bảng
     public DbSet<Cart> Carts { get; set; }
     public DbSet<CartItem> CartItems { get; set; }
     public DbSet<Product> Products { get; set; }
+    public DbSet<Order> Orders { get; set; } // Thêm DbSet cho Order
+    public DbSet<OrderItem> OrderItems { get; set; } // Thêm DbSet cho OrderItem
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -29,5 +32,17 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             .HasOne(ci => ci.Product)
             .WithMany()
             .HasForeignKey(ci => ci.ProductId);
+
+        // Cấu hình quan hệ 1-Nhiều giữa Order và OrderItem
+        modelBuilder.Entity<Order>()
+            .HasMany(o => o.OrderItems)
+            .WithOne(oi => oi.Order)
+            .HasForeignKey(oi => oi.OrderId);
+
+        // Cấu hình quan hệ 1-1 giữa OrderItem và Product
+        modelBuilder.Entity<OrderItem>()
+            .HasOne(oi => oi.Product)
+            .WithMany()
+            .HasForeignKey(oi => oi.ProductId);
     }
 }

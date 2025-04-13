@@ -1,0 +1,104 @@
+@{
+    ViewData["Title"] = "About";
+}
+
+<!-- Start Header/Navigation -->
+<nav class="custom-navbar navbar navbar navbar-expand-md navbar-dark bg-dark" arial-label="Furni navigation bar">
+
+    <div class="container">
+        <a class="navbar-brand" asp-controller="Home" asp-action="Index">Furni<span>.</span></a>
+
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarsFurni"
+            aria-controls="navbarsFurni" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarsFurni">
+            <ul class="custom-navbar-nav navbar-nav ms-auto mb-2 mb-md-0">
+                <li class="nav-item ">
+                    <a class="nav-link" asp-controller="Home" asp-action="Index">Home</a>
+                </li>
+                <li><a class="nav-link" asp-controller="Shop" asp-action="Index">Shop</a></li>
+                <li><a class="nav-link" asp-controller="About" asp-action="Index">About us</a></li>
+                <li><a class="nav-link" asp-controller="Services" asp-action="Index">Services</a></li>
+                <li><a class="nav-link" asp-controller="Blog" asp-action="Index">Blog</a></li>
+                <li><a class="nav-link" asp-controller="Contact" asp-action="Index">Contact us</a></li>
+            </ul>
+
+            <ul class="custom-navbar-cta navbar-nav mb-2 mb-md-0 ms-5">
+                @if (User.Identity != null && User.Identity.IsAuthenticated)
+                {
+                    @* <li><a class="nav-link" asp-controller="Account" asp-action="Profile"><img src="images/user.svg">
+                        </a></li> *@
+                    <li class="d-flex align-items-center justify-content-center">
+                        <form asp-controller="Account" asp-action="Logout" method="post" class="d-inline">
+                            <button type="submit" class="btn btn-link nav-link"
+                                style="padding: 0; background: none; border: none; font-size: 14px;">Logout</button>
+                        </form>
+                    </li>
+                    <li><a class="nav-link" asp-controller="Cart" asp-action="Index"><img src="images/cart.svg"></a></li>
+                }
+                else
+                {
+                    <li><a class="nav-link" asp-controller="Account" asp-action="Login">Login</a></li>
+                    <li><a class="nav-link" asp-controller="Account" asp-action="Register">Register</a></li>
+                }
+
+            </ul>
+        </div>
+    </div>
+
+</nav>
+<!-- End Header/Navigation -->
+
+<!-- Start Hero Section -->
+<div class="hero">
+    <div class="container">
+        <div class="row justify-content-between">
+            <div class="col-lg-5">
+                <div class="intro-excerpt">
+                    <h1>History</h1>
+                    <p class="mb-4">Donec vitae odio quis nisl dapibus malesuada. Nullam ac aliquet velit. Aliquam
+                        vulputate velit imperdiet dolor tempor tristique.</p>
+                    <p><a href="" class="btn btn-secondary me-2">Shop Now</a><a href="#"
+                            class="btn btn-white-outline">Explore</a></p>
+                </div>
+            </div>
+            <div class="col-lg-7">
+                <div class="hero-img-wrap">
+                    <img src="images/couch.png" class="img-fluid">
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- End Hero Section -->
+<div class="container mt-5 " style="margin-bottom: 100px;">
+    <h2 class="text-center mb-4">Order History</h2>
+    <table class="table table-bordered table-hover">
+        <thead class="table-dark">
+            <tr>
+                <th scope="col">Order ID</th>
+                <th scope="col">Order Date</th>
+                <th scope="col">Total Amount</th>
+                <th scope="col">Status</th>
+                <th scope="col">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var order in Model)
+            {
+                <tr>
+                    <td>@order.Id</td>
+                    <td>@order.OrderDate.ToString("dd/MM/yyyy")</td>
+                    <td>@order.TotalAmount.ToString("C0", System.Globalization.CultureInfo.GetCultureInfo("vi-VN"))</td>
+                    <td>@order.Status</td>
+                    <td>
+                        <a asp-controller="History" asp-action="Details" asp-route-orderId="@order.Id"
+                            class="btn btn-primary btn-sm">View Details</a>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
