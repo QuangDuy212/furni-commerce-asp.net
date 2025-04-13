@@ -78,7 +78,7 @@
             @foreach (var product in Model)
             {
                 <div class="col-12 col-md-4 col-lg-3 mb-5">
-                    <a class="product-item" href="#">
+                    <a class="product-item" asp-controller="Cart" asp-action="AddToCart" asp-route-productId="@product.Id">
                         <img src="@product.ImageUrl" class="img-fluid product-thumbnail" alt="@product.Name">
                         <h3 class="product-title">@product.Name</h3>
                         <strong class="product-price">@product.Price.ToString("C0",

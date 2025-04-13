@@ -11,5 +11,8 @@ namespace Furni.Models
 
         [StringLength(200)]
         public string Address { get; set; }
+
+        // Quan hệ 1-1 với Cart
+        public Cart Cart { get; set; }
     }
 }
