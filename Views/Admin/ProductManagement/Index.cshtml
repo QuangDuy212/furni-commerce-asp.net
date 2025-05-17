@@ -273,10 +273,10 @@
                 <div class="card shadow mb-4">
                     <form asp-controller="Admin" asp-action="DeleteMultipleProducts" method="post">
                         <div class="card-header py-3 d-flex justify-content-between ">
-                            <h6 class="m-0 font-weight-bold text-primary">Table User</h6>
+                            <h6 class="m-0 font-weight-bold text-primary">Table Product</h6>
                             <div>
-                                <button class="btn btn-primary btn-sm" type="button" onclick="importProducts()">Import
-                                </button>
+                                @* <button class="btn btn-primary btn-sm" type="button" onclick="importProducts()">Import
+                                </button> *@
                                 <input type="file" id="importFile" accept=".xlsx" style="display: none;" />
                                 <button class="btn btn-success btn-sm" type="button"
                                     onclick="exportSelectedProducts()">Export

@@ -4,12 +4,15 @@ using Furni.Models;
 using Microsoft.AspNetCore.Identity;
 using Furni.ViewModel;
 using ClosedXML.Excel;
+using OfficeOpenXml;
 using System.ComponentModel;
 using Furni.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Furni.Controllers;
 
+[Authorize(Roles = "ADMIN")]
 public class AdminController : Controller
 {
     private readonly ILogger<AdminController> _logger;
@@ -58,16 +61,25 @@ public class AdminController : Controller
 
     public async Task<IActionResult> UserManagement()
     {
-        var users = _userManager.Users.Select(user => new UserViewModel
-        {
-            Id = user.Id,
-            FullName = user.FullName,
-            Email = user.Email,
-            PhoneNumber = user.PhoneNumber,
-            Address = user.Address
-        }).ToList();
+        var users = await _userManager.Users.ToListAsync(); // Lấy danh sách tất cả người dùng
 
-        return View("UserManagement/Index", users);
+        var userViewModels = new List<UserViewModel>();
+
+        foreach (var user in users)
+        {
+            var roles = await _userManager.GetRolesAsync(user); // Lấy danh sách Role của người dùng
+            userViewModels.Add(new UserViewModel
+            {
+                Id = user.Id,
+                FullName = user.FullName,
+                Email = user.Email,
+                PhoneNumber = user.PhoneNumber,
+                Address = user.Address,
+                Role = string.Join(", ", roles) // Gộp các Role thành chuỗi (nếu có nhiều Role)
+            });
+        }
+
+        return View("UserManagement/Index", userViewModels);
     }
 
     [HttpGet]
@@ -112,19 +124,47 @@ public class AdminController : Controller
             user.PhoneNumber = model.PhoneNumber;
             user.Address = model.Address;
 
-            // Lưu thay đổi
-            var result = await _userManager.UpdateAsync(user);
-            if (result.Succeeded)
+            // Lưu thay đổi thông tin người dùng
+            var updateResult = await _userManager.UpdateAsync(user);
+            if (!updateResult.Succeeded)
             {
-                return RedirectToAction("UserManagement");
+                foreach (var error in updateResult.Errors)
+                {
+                    ModelState.AddModelError(string.Empty, error.Description);
+                }
+                return View("UserManagement/Update", model);
             }
 
-            // Xử lý lỗi nếu cập nhật thất bại
-            foreach (var error in result.Errors)
+            // Lấy danh sách Role hiện tại của người dùng
+            var currentRoles = await _userManager.GetRolesAsync(user);
+
+            // Xóa tất cả các Role hiện tại
+            var removeRolesResult = await _userManager.RemoveFromRolesAsync(user, currentRoles);
+            if (!removeRolesResult.Succeeded)
             {
-                ModelState.AddModelError(string.Empty, error.Description);
+                foreach (var error in removeRolesResult.Errors)
+                {
+                    ModelState.AddModelError(string.Empty, error.Description);
+                }
+                return View("UserManagement/Update", model);
             }
-            // return View("UserManagement/Update", model);
+
+            // Gán Role mới cho người dùng
+            if (!string.IsNullOrEmpty(model.Role))
+            {
+                var addRoleResult = await _userManager.AddToRoleAsync(user, model.Role);
+                if (!addRoleResult.Succeeded)
+                {
+                    foreach (var error in addRoleResult.Errors)
+                    {
+                        ModelState.AddModelError(string.Empty, error.Description);
+                    }
+                    return View("UserManagement/Update", model);
+                }
+            }
+
+            // Nếu tất cả thành công, chuyển hướng về trang UserManagement
+            return RedirectToAction("UserManagement");
         }
 
         // Nếu ModelState không hợp lệ, trả về lại view với dữ liệu hiện tại
@@ -310,48 +350,73 @@ public class AdminController : Controller
             {
                 await file.CopyToAsync(stream);
 
-                // Mở file Excel bằng ClosedXML
-                using (var workbook = new XLWorkbook(stream))
-                {
-                    var worksheet = workbook.Worksheet(1); // Lấy sheet đầu tiên
-                    var rows = worksheet.RowsUsed();
+                // Thiết lập giấy phép miễn phí
+                ExcelPackage.LicenseContext = OfficeOpenXml.LicenseContext.NonCommercial;
 
-                    foreach (var row in rows.Skip(1)) // Bỏ qua dòng tiêu đề
+                // Mở file Excel bằng EPPlus
+                using (var package = new OfficeOpenXml.ExcelPackage(stream))
+                {
+                    var worksheet = package.Workbook.Worksheets[0]; // Lấy sheet đầu tiên
+                    var rowCount = worksheet.Dimension.Rows; // Số lượng hàng trong sheet
+
+                    for (int row = 2; row <= rowCount; row++) // Bỏ qua dòng tiêu đề
                     {
                         try
                         {
-                            // Kiểm tra và loại bỏ hyperlink trong cột Email (nếu có)
-                            var emailCell = row.Cell(3);
-                            if (emailCell.HasHyperlink)
+                            // Lấy dữ liệu từ các cột
+                            var email = worksheet.Cells[row, 1].Text.Trim();
+                            var fullName = worksheet.Cells[row, 2].Text.Trim();
+                            var phoneNumber = worksheet.Cells[row, 3].Text.Trim();
+                            var address = worksheet.Cells[row, 4].Text.Trim();
+                            var password = worksheet.Cells[row, 5].Text.Trim();
+                            var role = worksheet.Cells[row, 6].Text.Trim();
+
+                            // Kiểm tra nếu email đã tồn tại
+                            var existingUser = await _userManager.FindByEmailAsync(email);
+                            if (existingUser != null)
                             {
-                                emailCell.Hyperlink = null; // Loại bỏ hyperlink
+                                _logger.LogWarning($"User with email {email} already exists. Skipping...");
+                                continue;
                             }
 
+                            // Tạo người dùng mới
                             var user = new ApplicationUser
                             {
-                                UserName = row.Cell(1).GetValue<string>(),
-                                FullName = row.Cell(2).GetValue<string>(),
-                                Email = emailCell.GetValue<string>(),
-                                PhoneNumber = row.Cell(4).GetValue<string>(),
-                                Address = row.Cell(5).GetValue<string>()
+                                UserName = email,
+                                Email = email,
+                                FullName = fullName,
+                                PhoneNumber = phoneNumber,
+                                Address = address,
+                                EmailConfirmed = true // Đặt email đã xác nhận
                             };
 
-                            var password = row.Cell(6).GetValue<string>(); // Lấy mật khẩu từ cột thứ 6
-
-                            // Tạo người dùng với mật khẩu từ file Excel
-                            var result = await _userManager.CreateAsync(user, password);
-                            if (!result.Succeeded)
+                            var createResult = await _userManager.CreateAsync(user, password);
+                            if (!createResult.Succeeded)
                             {
-                                foreach (var error in result.Errors)
+                                foreach (var error in createResult.Errors)
                                 {
-                                    ModelState.AddModelError(string.Empty, error.Description);
+                                    _logger.LogError($"Error creating user {email}: {error.Description}");
+                                }
+                                continue;
+                            }
+
+                            // Gán Role cho người dùng
+                            if (!string.IsNullOrEmpty(role))
+                            {
+                                var addRoleResult = await _userManager.AddToRoleAsync(user, role);
+                                if (!addRoleResult.Succeeded)
+                                {
+                                    foreach (var error in addRoleResult.Errors)
+                                    {
+                                        _logger.LogError($"Error assigning role {role} to user {email}: {error.Description}");
+                                    }
                                 }
                             }
                         }
                         catch (Exception ex)
                         {
                             // Ghi log lỗi và bỏ qua dòng bị lỗi
-                            _logger.LogError($"Error processing row: {ex.Message}");
+                            _logger.LogError($"Error processing row {row}: {ex.Message}");
                             continue;
                         }
                     }
@@ -407,40 +472,25 @@ public class AdminController : Controller
     {
         if (ModelState.IsValid)
         {
+            // Find product by ID
             var product = await _context.Products.FindAsync(model.Id);
             if (product == null)
             {
-                return NotFound();
+                return NotFound($"Product with ID {model.Id} not found.");
             }
 
-            // Cập nhật các thuộc tính
+            // Update product information
             product.Name = model.Name;
             product.Price = model.Price;
+            product.ImageUrl = model.ImageUrl;
 
-            // Xử lý file upload nếu có file mới
-            if (model.ImageFile != null)
-            {
-                var fileName = Path.GetFileNameWithoutExtension(model.ImageFile.FileName);
-                var extension = Path.GetExtension(model.ImageFile.FileName);
-                var newFileName = $"{fileName}_{Guid.NewGuid()}{extension}";
-                var filePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/images", newFileName);
-
-                using (var stream = new FileStream(filePath, FileMode.Create))
-                {
-                    await model.ImageFile.CopyToAsync(stream);
-                }
-
-                // Cập nhật đường dẫn hình ảnh
-                product.ImageUrl = $"/images/{newFileName}";
-            }
-
-            _context.Products.Update(product);
+            // Save changes
             await _context.SaveChangesAsync();
-
             return RedirectToAction("ProductManagement");
         }
 
-        return View(model);
+        // If ModelState is invalid, return to the view with current data
+        return View("ProductManagement/Update", model);
     }
 
     [HttpGet]

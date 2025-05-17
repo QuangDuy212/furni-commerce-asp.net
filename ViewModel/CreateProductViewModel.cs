@@ -12,9 +12,7 @@ namespace Furni.ViewModel
         [Range(0, double.MaxValue, ErrorMessage = "Price must be a positive value.")]
         public decimal Price { get; set; }
 
-        // [Required(ErrorMessage = "Image is required")]
-        // public string ImageUrl { get; set; }
-        [Required(ErrorMessage = "Image is required")]
-        public IFormFile ImageFile { get; set; }
+
+        public IFormFile? ImageFile { get; set; }
     }
 }

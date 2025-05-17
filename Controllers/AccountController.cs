@@ -17,6 +17,11 @@ public class AccountController : Controller
         _signInManager = signInManager;
     }
 
+    public IActionResult AccessDenied()
+    {
+        return View();
+    }
+
     [HttpGet]
     public IActionResult Login()
     {
@@ -54,8 +59,6 @@ public class AccountController : Controller
     {
         return View();
     }
-
-    // POST: /Account/Register
     [HttpPost]
     public async Task<IActionResult> Register(RegisterViewModel model)
     {
@@ -69,22 +72,38 @@ public class AccountController : Controller
                 Address = model.Address
             };
 
+            // Tạo người dùng mới
             var result = await _userManager.CreateAsync(user, model.Password);
 
             if (result.Succeeded)
             {
+                // Gán Role "USER" cho người dùng
+                var roleResult = await _userManager.AddToRoleAsync(user, "USER");
+                if (!roleResult.Succeeded)
+                {
+                    foreach (var error in roleResult.Errors)
+                    {
+                        ModelState.AddModelError(string.Empty, error.Description);
+                    }
+                    return View(model);
+                }
+
+                // Đăng nhập người dùng sau khi đăng ký thành công
                 await _signInManager.SignInAsync(user, isPersistent: false);
                 return RedirectToAction("Index", "Home");
             }
 
+            // Xử lý lỗi nếu tạo người dùng thất bại
             foreach (var error in result.Errors)
             {
                 ModelState.AddModelError(string.Empty, error.Description);
             }
         }
 
+        // Nếu ModelState không hợp lệ, trả về lại view với dữ liệu hiện tại
         return View(model);
     }
+
 
     [HttpPost]
     [ValidateAntiForgeryToken]

@@ -1,5 +1,6 @@
 using Furni.Data;
 using Furni.Models;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -23,6 +24,13 @@ builder.WebHost.UseUrls("http://localhost:3001", "https://localhost:3000");
 
 var app = builder.Build();
 
+// Seed dữ liệu Role
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    await SeedData.Initialize(services);
+}
+
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
 {
@@ -32,24 +40,23 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseStaticFiles(); // Đảm bảo phục vụ các tệp tĩnh (CSS, JS, hình ảnh)
+
 app.UseRouting();
 
+app.UseAuthentication(); // Phải gọi trước app.UseAuthorization()
 app.UseAuthorization();
-app.UseAuthentication();
-
-app.MapStaticAssets();
 
 app.MapControllerRoute(
     name: "default",
-    pattern: "{controller=Home}/{action=Index}/{id?}")
-    .WithStaticAssets();
+    pattern: "{controller=Home}/{action=Index}/{id?}");
 
 app.MapControllerRoute(
     name: "shop",
-    pattern: "{controller=Shop}/{action=Index}/{id?}")
-    .WithStaticAssets();
+    pattern: "{controller=Shop}/{action=Index}/{id?}");
+
 app.MapControllerRoute(
     name: "about",
-    pattern: "{controller=about}/{action=Index}/{id?}")
-    .WithStaticAssets();
+    pattern: "{controller=About}/{action=Index}/{id?}");
+
 app.Run();
