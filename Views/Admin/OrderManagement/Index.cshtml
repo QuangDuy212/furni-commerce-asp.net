@@ -296,6 +296,7 @@
                                                 <input type="checkbox" id="selectAll" />
                                             </th>
                                             <th>Order ID</th>
+                                            <th>User</th>
                                             <th>Order Date</th>
                                             <th>Total Amount</th>
                                             <th>Status</th>
@@ -311,6 +312,7 @@
                                                 <td><input type="checkbox" class="rowCheckbox" name="ids"
                                                         value="@order.Id" /></td>
                                                 <td>@order.Id</td>
+                                                <td>@order.User?.Email</td>
                                                 <td>@order.OrderDate.ToString("dd/MM/yyyy")</td>
                                                 <td>@order.TotalAmount.ToString("C0",
                                                                                                     System.Globalization.CultureInfo.GetCultureInfo("vi-VN"))</td>

@@ -10,5 +10,6 @@ namespace Furni.ViewModel
         public decimal TotalAmount { get; set; } // Tổng giá trị đơn hàng
 
         public string Status { get; set; }
+        public string Email {get; set;}
     }
 }

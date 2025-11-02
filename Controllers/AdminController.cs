@@ -680,6 +680,7 @@ public class AdminController : Controller
     public async Task<IActionResult> OrderManagement()
     {
         var orders = await _context.Orders
+            .Include(o => o.User) 
             .Include(o => o.OrderItems)
             .ThenInclude(oi => oi.Product)
             .OrderByDescending(o => o.OrderDate)
@@ -692,6 +693,7 @@ public class AdminController : Controller
     public async Task<IActionResult> OrderDetails(int id)
     {
         var order = await _context.Orders
+            .Include(o => o.User) 
             .Include(o => o.OrderItems)
             .ThenInclude(oi => oi.Product)
             .FirstOrDefaultAsync(o => o.Id == id);
@@ -709,6 +711,7 @@ public class AdminController : Controller
     {
         // Lấy thông tin đơn hàng theo ID
         var order = await _context.Orders
+            .Include(o => o.User) 
             .Include(o => o.OrderItems)
             .ThenInclude(oi => oi.Product)
             .FirstOrDefaultAsync(o => o.Id == id);
@@ -721,6 +724,7 @@ public class AdminController : Controller
         // Tạo ViewModel để truyền dữ liệu đến view
         var orderViewModel = new OrderViewModel
         {
+            Email = order.User.Email,
             Id = order.Id,
             OrderDate = order.OrderDate,
             TotalAmount = order.TotalAmount,
@@ -794,7 +798,8 @@ public class AdminController : Controller
         var orders = await _context.Orders
             .Where(o => ids.Contains(o.Id))
             .Include(o => o.OrderItems)
-            .ThenInclude(oi => oi.Product)
+            .Include(o => o.User)
+            // .ThenInclude(oi => oi.Product)
             .ToListAsync();
 
         using (var workbook = new XLWorkbook())
@@ -803,17 +808,19 @@ public class AdminController : Controller
 
             // Tạo tiêu đề cột
             worksheet.Cell(1, 1).Value = "Order ID";
-            worksheet.Cell(1, 2).Value = "Order Date";
-            worksheet.Cell(1, 3).Value = "Total Amount";
-            worksheet.Cell(1, 4).Value = "Status";
+            worksheet.Cell(1, 2).Value = "User";
+            worksheet.Cell(1, 3).Value = "Order Date";
+            worksheet.Cell(1, 4).Value = "Total Amount";
+            worksheet.Cell(1, 5).Value = "Status";
 
             // Điền dữ liệu vào các hàng
             for (int i = 0; i < orders.Count; i++)
             {
                 worksheet.Cell(i + 2, 1).Value = orders[i].Id;
-                worksheet.Cell(i + 2, 2).Value = orders[i].OrderDate.ToString("dd/MM/yyyy");
-                worksheet.Cell(i + 2, 3).Value = orders[i].TotalAmount;
-                worksheet.Cell(i + 2, 4).Value = orders[i].Status;
+                worksheet.Cell(i + 2, 2).Value = orders[i].User.Email;
+                worksheet.Cell(i + 2, 3).Value = orders[i].OrderDate.ToString("dd/MM/yyyy");
+                worksheet.Cell(i + 2, 4).Value = orders[i].TotalAmount;
+                worksheet.Cell(i + 2, 5).Value = orders[i].Status;
             }
 
             using (var stream = new MemoryStream())
